@@ -125,6 +125,8 @@ if app_mode == "Free Question Mode":
             if 'user_input' not in st.session_state:
                 st.session_state.user_input = ""
             st.session_state.user_input += sym
+            if sym == "∫":
+                st.session_state.show_integral_bounds = True
 
     symbols_row2 = ["sin", "cos", "tan", "log", "ln", "e", "∞", "≤", "≥", "≠"]
     cols2 = st.columns(len(symbols_row2))
@@ -133,6 +135,15 @@ if app_mode == "Free Question Mode":
             if 'user_input' not in st.session_state:
                 st.session_state.user_input = ""
             st.session_state.user_input += sym + "("
+
+    # Integral bounds input (appears after tapping ∫)
+    if st.session_state.get('show_integral_bounds', False):
+        st.markdown("**Integral bounds:**")
+        bcol1, bcol2 = st.columns(2)
+        with bcol1:
+            st.number_input("Lower bound", value=0.0, key="int_lower")
+        with bcol2:
+            st.number_input("Upper bound", value=1.0, key="int_upper")
 
     user_q = st.text_area("📝 Enter your math problem:", height=100,
                           value=st.session_state.get('user_input', ''),
@@ -156,16 +167,18 @@ if app_mode == "Free Question Mode":
                 sol = clean_latex(resp.choices[0].message.content)
                 st.session_state.last_solution = sol
                 # Extract function for plotting - robust parsing
+                func = ""
                 if "f(x)" in user_q:
                     after = user_q.split("f(x)")[1]
                     if "=" in after:
                         func = after.split("=")[1].strip()
-                        # Cut off at comma/period/text
                         func = re.split(r'[,.\n]', func)[0].strip()
-                        # Convert unicode superscripts
-                        func = func.replace("²", "^2").replace("³", "^3")
-                        func = func.replace("×", "*")
-                        st.session_state.last_func = func
+                elif st.session_state.get('show_integral_bounds', False):
+                    # Integral mode: extract expression after ∫
+                    func = user_q.replace("∫", "").replace("dx", "").strip()
+                if func:
+                    func = func.replace("²", "^2").replace("³", "^3").replace("×", "*")
+                    st.session_state.last_func = func
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
 
@@ -182,22 +195,39 @@ if app_mode == "Free Question Mode":
                 x = np.linspace(-10, 10, 500)
                 y = safe_eval(st.session_state.last_func, x)
 
-                tangent_x = st.slider("Drag to see tangent line:", -10.0, 10.0, 0.0, 0.1, key="tangent_slider")
-                h = 0.001
-                slope = (safe_eval(st.session_state.last_func, np.array([tangent_x+h]))[0] - safe_eval(st.session_state.last_func, np.array([tangent_x]))[0]) / h
-                y_at_x = safe_eval(st.session_state.last_func, np.array([tangent_x]))[0]
+                # Detect if this is an area/integral problem
+                is_integral = st.session_state.get('show_integral_bounds', False) or bool(re.search(r'integral|area|under|from.*to', user_q.lower()))
+                int_a = st.session_state.get('int_lower', 0)
+                int_b = st.session_state.get('int_upper', 1)
 
                 fig, ax = plt.subplots(figsize=(9, 5))
                 ax.plot(x, y, color="#2563eb", linewidth=2.5, label="f(x)")
-                tx = np.linspace(tangent_x-3, tangent_x+3, 100)
-                ax.plot(tx, slope*(tx-tangent_x)+y_at_x, color="#dc2626", linewidth=2, linestyle="--", label=f"Tangent: slope={slope:.2f}")
-                ax.scatter([tangent_x], [y_at_x], color="#dc2626", s=80, zorder=5)
+
+                if is_integral:
+                    # Draw shaded area under curve
+                    x_fill = np.linspace(int_a, int_b, 200)
+                    y_fill = safe_eval(st.session_state.last_func, x_fill)
+                    ax.fill_between(x_fill, y_fill, 0, color="#2563eb", alpha=0.3, label="Area under curve")
+                    # Numerical integration result
+                    dx = x_fill[1] - x_fill[0]
+                    area = np.sum(y_fill) * dx
+                    st.info(f"📏 Area from x={int_a} to x={int_b}: ≈ {area:.3f}")
+                else:
+                    # Tangent line slider for derivative problems
+                    tangent_x = st.slider("Drag to see tangent line:", -10.0, 10.0, 0.0, 0.1, key="tangent_slider")
+                    h = 0.001
+                    slope = (safe_eval(st.session_state.last_func, np.array([tangent_x+h]))[0] - safe_eval(st.session_state.last_func, np.array([tangent_x]))[0]) / h
+                    y_at_x = safe_eval(st.session_state.last_func, np.array([tangent_x]))[0]
+                    tx = np.linspace(tangent_x-3, tangent_x+3, 100)
+                    ax.plot(tx, slope*(tx-tangent_x)+y_at_x, color="#dc2626", linewidth=2, linestyle="--", label=f"Tangent: slope={slope:.2f}")
+                    ax.scatter([tangent_x], [y_at_x], color="#dc2626", s=80, zorder=5)
+                    st.info(f"📍 At x={tangent_x:.1f}: f(x)={y_at_x:.2f}, slope={slope:.2f}")
+
                 ax.grid(True, alpha=0.3, linestyle="--")
                 ax.axhline(y=0, color="#666", linewidth=0.8)
                 ax.axvline(x=0, color="#666", linewidth=0.8)
                 ax.legend()
                 st.pyplot(fig)
-                st.info(f"📍 At x={tangent_x:.1f}: f(x)={y_at_x:.2f}, slope={slope:.2f}")
             except Exception as e:
                 st.caption("ℹ️ Graph not available for this function.")
 
