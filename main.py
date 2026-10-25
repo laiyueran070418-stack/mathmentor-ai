@@ -212,6 +212,34 @@ if app_mode == "Free Question Mode":
                     dx = x_fill[1] - x_fill[0]
                     area = np.sum(y_fill) * dx
                     st.info(f"📏 Area from x={int_a} to x={int_b}: ≈ {area:.3f}")
+                elif "second derivative" in user_q.lower():
+                    # Second derivative: show f(x) and f'(x) side by side
+                    h = 0.001
+                    y_prime = (safe_eval(st.session_state.last_func, x+h) - safe_eval(st.session_state.last_func, x-h)) / (2*h)
+                    tangent_x = st.slider("Drag to see tangent:", -10.0, 10.0, 0.0, 0.1, key="second_deriv_slider")
+                    y_at = safe_eval(st.session_state.last_func, np.array([tangent_x]))[0]
+                    slope = (safe_eval(st.session_state.last_func, np.array([tangent_x+h]))[0] - safe_eval(st.session_state.last_func, np.array([tangent_x-h]))[0]) / (2*h)
+                    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 8))
+                    ax1.plot(x, y, color="#2563eb", linewidth=2.5, label="f(x)")
+                    tx = np.linspace(tangent_x-3, tangent_x+3, 100)
+                    ax1.plot(tx, slope*(tx-tangent_x)+y_at, color="#dc2626", linewidth=2, linestyle="--", label="Tangent")
+                    ax1.scatter([tangent_x], [y_at], color="#dc2626", s=60, zorder=5)
+                    ax1.set_title("Original function f(x)")
+                    ax1.grid(True, alpha=0.3, linestyle="--")
+                    ax1.axhline(y=0, color="#666", linewidth=0.8)
+                    ax1.legend()
+                    ax2.plot(x, y_prime, color="#dc2626", linewidth=2.5, label="f'(x)")
+                    # Tangent on derivative graph too
+                    slope2 = (safe_eval(st.session_state.last_func, np.array([tangent_x+2*h]))[0] - 2*safe_eval(st.session_state.last_func, np.array([tangent_x]))[0] + safe_eval(st.session_state.last_func, np.array([tangent_x-2*h]))[0]) / (4*h*h)
+                    ax2.plot(tx, slope2*(tx-tangent_x) + safe_eval(st.session_state.last_func, np.array([tangent_x+h]))[0]/h, color="#2563eb", linewidth=2, linestyle="--", label="Tangent on f'(x)")
+                    ax2.scatter([tangent_x], [slope], color="#2563eb", s=60, zorder=5)
+                    ax2.set_title("First derivative f'(x)")
+                    ax2.grid(True, alpha=0.3, linestyle="--")
+                    ax2.axhline(y=0, color="#666", linewidth=0.8)
+                    ax2.legend()
+                    st.pyplot(fig)
+                    st.info(f"📍 At x={tangent_x:.1f}: f(x)={y_at:.2f} | f'(x) slope={slope:.2f} | f''(x) slope≈{slope2:.2f}")
+                    st.stop()
                 else:
                     # Tangent line slider for derivative problems
                     tangent_x = st.slider("Drag to see tangent line:", -10.0, 10.0, 0.0, 0.1, key="tangent_slider")
